@@ -1408,3 +1408,78 @@ kbd {
 .cm-editor .cm-content span {
   color: var(--code);
 }
+
+/* In working notes the butterfly is a small presence, not a permanent sidebar. */
+.companion-sprite {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 48px;
+  height: 48px;
+  z-index: 12;
+  pointer-events: none;
+  transition: transform 850ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.sprite-button {
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+}
+.sprite-button .butterfly {
+  width: 52px;
+  height: 52px;
+}
+.sprite-button:hover .butterfly {
+  filter: drop-shadow(0 0 10px var(--accent-soft));
+}
+.sprite-thought {
+  position: absolute;
+  top: 46px;
+  right: 10px;
+  width: min(244px, calc(100vw - 40px));
+  padding: 17px 20px 15px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px 3px 12px 12px;
+  box-shadow: 0 8px 30px #0001;
+  pointer-events: auto;
+  animation: appear 0.25s ease-out;
+}
+.sprite-thought p {
+  font:
+    12px/1.85 'Lora',
+    serif;
+  color: var(--muted);
+  margin: 0;
+  padding-right: 5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.sprite-thought .text-button {
+  margin-top: 9px;
+  font-size: 10px;
+}
+.sprite-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px;
+  color: var(--faint);
+}
+.is-paused .butterfly,
+.is-paused .wing-left,
+.is-paused .wing-right {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .companion-sprite {
+    transition: none;
+  }
+}

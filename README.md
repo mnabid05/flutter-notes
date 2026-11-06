@@ -46,6 +46,7 @@ NODE_ENV=production pnpm start
 - Write rich text with headings, lists, quotes, inline code, and undo/redo.
 - Type `/` in an empty paragraph, or press **⌘K / Ctrl+K**, for the command menu.
 - Talk to the companion with the dock, butterfly, or command menu.
+- The starting note keeps its margin introduction. In other notes, a small butterfly follows your writing and brings optional thoughts in a dismissible bubble.
 - Insert and edit LaTeX equations; inline `$…$` input rules are supported.
 - Edit Python in CodeMirror and run it locally using Pyodide/WebAssembly.
 - Insert diagrams and a real 100-dice simulation.

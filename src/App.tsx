@@ -28,6 +28,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { Butterfly } from './components/Butterfly';
+import CompanionSprite from './components/CompanionSprite';
 import NoteEditor from './components/NoteEditor';
 import { readNotes, saveNotes, type Note } from './lib/document';
 import { policies, fingerprint, shouldEvaluate, type Intervention } from './lib/policy';
@@ -70,6 +71,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [math, setMath] = useState<{ pos: number | null; latex: string } | null>(null);
   const editor = useRef<Editor | null>(null);
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const abort = useRef<AbortController | null>(null);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previous = useRef('');
@@ -143,6 +145,7 @@ export default function App() {
   }, []);
   const setEditor = useCallback((value: Editor | null) => {
     editor.current = value;
+    setActiveEditor(value);
   }, []);
   const noteRef = useRef(note);
   noteRef.current = note;
@@ -444,50 +447,69 @@ export default function App() {
           />
         </div>
         <div className="end-mark">a thought is a beginning, not a conclusion.</div>
-        <aside
-          className={`companion-margin ${busy ? 'is-thinking' : ''}`}
-          aria-label="Your companion"
-        >
-          <button
-            className="companion-button"
-            onClick={() => setChat((v) => !v)}
-            aria-label="Talk to your companion"
+        {note.id === 'first-flight' && (
+          <aside
+            className={`companion-margin ${busy ? 'is-thinking' : ''}`}
+            aria-label="Your companion"
           >
-            <Butterfly state={status} />
-          </button>
-          <div className="companion-rule" />
-          <span className="companion-label">YOUR COMPANION</span>
-          <p>
-            {busy
-              ? stage
-              : answer && !chat
-                ? answer.message
-                : paused
-                  ? 'I’ll be here when you need me.'
-                  : 'There’s a pattern in here. Take your time — I’m thinking with you.'}
-          </p>
-          {answer && !chat && (
-            <>
-              <button className="text-button" onClick={() => setChat(true)}>
-                Take a closer look <ArrowUpRight size={12} />
-              </button>
-              <button
-                className="text-button muted"
-                onClick={() => {
-                  setAnswer(null);
-                  lastIntervention.current = Date.now();
-                }}
-              >
-                Let it pass
-              </button>
-            </>
-          )}
-          <span className="presence-caption">
-            <span className="status-dot" />
-            {busy ? 'following along' : paused ? 'resting nearby' : 'quietly alongside'}
-          </span>
-        </aside>
+            <button
+              className="companion-button"
+              onClick={() => setChat((v) => !v)}
+              aria-label="Talk to your companion"
+            >
+              <Butterfly state={status} />
+            </button>
+            <div className="companion-rule" />
+            <span className="companion-label">YOUR COMPANION</span>
+            <p>
+              {busy
+                ? stage
+                : answer && !chat
+                  ? answer.message
+                  : paused
+                    ? 'I’ll be here when you need me.'
+                    : 'There’s a pattern in here. Take your time — I’m thinking with you.'}
+            </p>
+            {answer && !chat && (
+              <>
+                <button className="text-button" onClick={() => setChat(true)}>
+                  Take a closer look <ArrowUpRight size={12} />
+                </button>
+                <button
+                  className="text-button muted"
+                  onClick={() => {
+                    setAnswer(null);
+                    lastIntervention.current = Date.now();
+                  }}
+                >
+                  Let it pass
+                </button>
+              </>
+            )}
+            <span className="presence-caption">
+              <span className="status-dot" />
+              {busy ? 'following along' : paused ? 'resting nearby' : 'quietly alongside'}
+            </span>
+          </aside>
+        )}
       </main>
+      {note.id !== 'first-flight' && (
+        <CompanionSprite
+          key={note.id}
+          editor={activeEditor}
+          state={status}
+          paused={paused}
+          busy={busy}
+          stage={stage}
+          thought={answer?.message}
+          hidden={chat || sidebar || settings || command || Boolean(math)}
+          onTalk={() => setChat(true)}
+          onDismiss={() => {
+            setAnswer(null);
+            lastIntervention.current = Date.now();
+          }}
+        />
+      )}
       <footer className="bottom-bar">
         <div className="bottom-status">
           <span className="status-dot" />
