@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob: __ORIGIN__/pyodide/; worker-src blob:; connect-src __ORIGIN__/pyodide/"></head><body><script>
+// A sandboxed, opaque-origin frame owns the worker. No app credentials or notes are supplied.
+const origin = new URL(document.referrer).origin;
+const workerSource = `
+self.onmessage = async e => {
+ try {
+  importScripts('${origin}/pyodide/pyodide.js');
+  let output = ''; const append = s => { output = (output + s + '\\n').slice(0,16000); };
+  const py = await loadPyodide({ indexURL: '${origin}/pyodide/', stdout: append, stderr: append });
+  self.postMessage({type:'started'});
+  await py.runPythonAsync(e.data);
+  self.postMessage({type:'result', output});
+ } catch (error) { self.postMessage({type:'result', output: String(error)}); }
+};`;
+let worker;
+window.addEventListener('message', event => {
+ if (event.source !== parent || event.data?.type !== 'run' || worker) return;
+ const url = URL.createObjectURL(new Blob([workerSource], {type:'text/javascript'}));
+ worker = new Worker(url);
+ worker.onmessage = e => parent.postMessage(e.data, '*');
+ worker.onerror = e => parent.postMessage({type:'result',output:e.message || 'Python worker failed to load.'}, '*');
+ worker.postMessage(event.data.code);
+});
+parent.postMessage({type:'ready'}, '*');
+</script></body></html>
