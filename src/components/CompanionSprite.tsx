@@ -10,6 +10,7 @@ type Props = {
   busy: boolean;
   stage: string;
   thought?: string;
+  anchorId?: string;
   hidden: boolean;
   onTalk: () => void;
   onDismiss: () => void;
@@ -23,6 +24,7 @@ export default function CompanionSprite({
   busy,
   stage,
   thought,
+  anchorId,
   hidden,
   onTalk,
   onDismiss,
@@ -67,7 +69,14 @@ export default function CompanionSprite({
         }
         lastLine.current = lineY;
       }
-      const anchorX = following && !busy && !thought ? caretX + 28 : bounds.right + 18;
+      if (anchorId) {
+        const target = editor.view.dom.querySelector<HTMLElement>(
+          `[data-turn-id="${CSS.escape(anchorId)}"]`,
+        );
+        if (target)
+          lineY = (target.querySelector('.inline-answer') || target).getBoundingClientRect().top;
+      }
+      const anchorX = following && !busy && !thought && !anchorId ? caretX + 28 : bounds.right + 18;
       const x = Math.max(12, Math.min(anchorX, width - 60));
       const y = Math.max(offsetTop + 100, Math.min(lineY - 12, offsetTop + height - 168));
       setPosition((old) =>
@@ -101,7 +110,7 @@ export default function CompanionSprite({
       window.visualViewport?.removeEventListener('scroll', schedule);
       document.removeEventListener('selectionchange', schedule);
     };
-  }, [editor, paused, hidden, busy, Boolean(thought)]);
+  }, [editor, paused, hidden, busy, Boolean(thought), anchorId]);
 
   if (hidden || !position) return null;
   return (
@@ -113,7 +122,7 @@ export default function CompanionSprite({
       <button className="sprite-button" aria-label="Talk to your companion" onClick={onTalk}>
         <Butterfly state={busy ? 'thinking' : paused ? 'resting' : state} />
       </button>
-      {(busy || thought) && (
+      {((busy && !anchorId) || thought) && (
         <div
           className="sprite-thought"
           style={position.x < 260 ? { left: 10, right: 'auto' } : undefined}
@@ -130,7 +139,7 @@ export default function CompanionSprite({
           <p role="status">{busy ? stage || 'Thinking with you…' : thought}</p>
           {!busy && (
             <button className="text-button" onClick={onTalk}>
-              Think it through <ArrowUpRight size={12} />
+              Reply with / <ArrowUpRight size={12} />
             </button>
           )}
         </div>

@@ -10,13 +10,18 @@ import { PythonBlock, DiceBlock, DiagramBlock } from './Blocks';
 import { openDocument, apply, encode, type Note } from '../lib/document';
 import { noteText } from '../lib/context';
 import { seed, blank } from '../lib/seed';
+import { TextSelection } from '@tiptap/pm/state';
+import { AgentTurn } from './AgentTurn';
+import { InlineDirective } from './InlineDirective';
+import { parseInlineCommand } from '../lib/inline-commands';
 
 type Props = {
   note: Note;
   onEditor: (editor: Editor | null) => void;
-  onChange: (text: string) => void;
+  onChange: (text: string, fromAgent?: boolean) => void;
   onSave: (status: string) => void;
-  onSlash: () => void;
+  onAsk: (prompt: string, turnId: string) => void;
+  onStop: (turnId: string) => void;
   onMath: (position: number, latex: string) => void;
 };
 export default function NoteEditor(props: Props) {
@@ -110,7 +115,8 @@ function EditorBody({ doc, ...props }: Props & { doc: Y.Doc }) {
       extensions: [
         StarterKit.configure({ undoRedo: false, codeBlock: false }),
         Placeholder.configure({
-          placeholder: 'Let a thought land here. Type / to ask your companion…',
+          placeholder: ({ node }) =>
+            node.type.name === 'paragraph' ? 'Bring a thought. Type / to think together…' : '',
         }),
         Collaboration.configure({ document: doc }),
         UniqueID.configure({
@@ -129,6 +135,11 @@ function EditorBody({ doc, ...props }: Props & { doc: Y.Doc }) {
           blockOptions: { onClick: (node, pos) => handlers.current.onMath(pos, node.attrs.latex) },
           katexOptions: { throwOnError: false, trust: false },
         }),
+        AgentTurn.configure({
+          onRetry: (prompt: string, id: string) => handlers.current.onAsk(prompt, id),
+          onStop: (id: string) => handlers.current.onStop(id),
+        }),
+        InlineDirective,
         PythonBlock,
         DiceBlock,
         DiagramBlock,
@@ -136,26 +147,57 @@ function EditorBody({ doc, ...props }: Props & { doc: Y.Doc }) {
       editorProps: {
         attributes: { class: 'note-prose', 'aria-label': 'Note content', spellcheck: 'true' },
         handleKeyDown: (view, event) => {
-          const parent = view.state.selection.$from.parent;
           if (
-            event.key === '/' &&
-            !event.metaKey &&
-            !event.ctrlKey &&
-            parent.type.name === 'paragraph' &&
-            parent.textContent.trim() === ''
-          ) {
-            event.preventDefault();
-            handlers.current.onSlash();
-            return true;
-          }
-          return false;
+            event.isComposing ||
+            event.key !== 'Enter' ||
+            event.shiftKey ||
+            event.metaKey ||
+            event.ctrlKey
+          )
+            return false;
+          const { $from, empty } = view.state.selection;
+          if (!empty || $from.parent.type.name !== 'paragraph') return false;
+          const command = parseInlineCommand($from.parent.textContent);
+          if (!command) return false;
+          event.preventDefault();
+          const from = $from.before(),
+            to = $from.after();
+          const turnId = crypto.randomUUID();
+          const content =
+            command.kind === 'insert'
+              ? command.node
+              : {
+                  type: 'agentTurn',
+                  attrs: { turnId, prompt: command.prompt, status: 'thinking' },
+                };
+          // One undoable transaction replaces the directive and opens the next writing line.
+          const ed = handlers.current;
+          const replacement = view.state.schema.nodeFromJSON(content);
+          const paragraph = view.state.schema.nodes.paragraph.create();
+          const tr = view.state.tr.replaceWith(from, to, [replacement, paragraph]);
+          tr.setSelection(TextSelection.create(tr.doc, from + replacement.nodeSize + 1));
+          view.dispatch(tr);
+          // Let the editor's native transaction settle before starting a network request.
+          if (command.kind === 'ask') queueMicrotask(() => ed.onAsk(command.prompt, turnId));
+          return true;
         },
       },
-      onUpdate: ({ editor }) => {
+      onUpdate: ({ editor, transaction }) => {
         const text = noteText(editor);
-        queueMicrotask(() => handlers.current.onChange(text));
+        const fromAgent = Boolean(transaction.getMeta('agent'));
+        queueMicrotask(() => handlers.current.onChange(text, fromAgent));
       },
       onCreate: ({ editor }) => {
+        const tr = editor.state.tr;
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'agentTurn' && node.attrs.status === 'thinking')
+            tr.setNodeMarkup(pos, undefined, {
+              ...node.attrs,
+              status: 'error',
+              message: 'This thought was interrupted. You can try it again.',
+            });
+        });
+        if (tr.docChanged) editor.view.dispatch(tr);
         if (editor.isEmpty && !doc.getMap('metadata').get('initialized')) {
           editor.commands.setContent(props.note.id === 'first-flight' ? seed : blank);
           doc.getMap('metadata').set('initialized', true);

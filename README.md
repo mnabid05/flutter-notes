@@ -4,12 +4,12 @@ A quiet place to think, with a companion that thinks alongside you.
 
 Flutter is a working, single-user notebook inspired by the Flutter Vision demo: a textured canvas, restrained typography, luminous butterfly, margin coaching, and in-document experiments. It includes warm light and dark themes.
 
-![Dark canvas](docs/screenshots/dark.jpg)
+![Inline companion](docs/screenshots/inline.jpg)
 
 <details>
-<summary>Light canvas</summary>
+<summary>Light home page</summary>
 
-![Light canvas](docs/screenshots/light.jpg)
+![Light home page](docs/screenshots/home-light.jpg)
 
 </details>
 
@@ -44,13 +44,14 @@ NODE_ENV=production pnpm start
 ## What you can do
 
 - Write rich text with headings, lists, quotes, inline code, and undo/redo.
-- Type `/` in an empty paragraph, or press **⌘K / Ctrl+K**, for the command menu.
-- Talk to the companion with the dock, butterfly, or command menu.
-- The starting note keeps its margin introduction. In other notes, a small butterfly follows your writing and brings optional thoughts in a dismissible bubble.
+- Type `/ your thought` on its own line and press **Enter** to talk directly to the companion. The question and response stay in your note; there is no separate chat panel.
+- Press **⌘K / Ctrl+K** or click the butterfly to begin a `/` thought in the editor. **Shift+Enter** adds a line without submitting.
+- The home page holds the companion introduction, document library, theme, and export controls. Inside every document, a small butterfly follows your writing and brings optional margin thoughts. Presence is the only preference available while writing.
+- Type `/code`, `/math` (optionally followed by LaTeX), `/diagram`, or `/dice` and press **Enter** to insert a block.
 - Insert and edit LaTeX equations; inline `$…$` input rules are supported.
 - Edit Python in CodeMirror and run it locally using Pyodide/WebAssembly.
 - Insert diagrams and a real 100-dice simulation.
-- Accept or dismiss companion proposals. Accepted content is undoable.
+- Accept or dismiss inline companion proposals. Accepted content is inserted after the exchange, preserving anything you have written since asking, and is undoable. Exchanges persist with the document. Interrupted requests can be retried inline.
 - Choose **light, medium, or high presence**, or pause ambient observation entirely.
 - Switch between light and dark canvases. Theme, intervention level, and pause preference persist.
 - Create, rename, and search notes. Export a complete note as JSON.
@@ -64,7 +65,7 @@ NODE_ENV=production pnpm start
 4. For ambient opportunities, a small Haiku call decides whether to remain silent.
 5. Only useful opportunities go to Sonnet. Explicit questions skip the gate.
 6. Typed output is schema-validated. No model-generated HTML is rendered.
-7. Suggestions are checked against a fingerprint of the note, including code/math. Changed notes invalidate insertion; stale ambient results are discarded.
+7. Ambient results are checked against a fingerprint of the note, including code/math, and discarded when stale. Direct replies attach to their original exchange by stable ID; accepting a proposal inserts after that exchange without replacing subsequent writing.
 
 | Presence | Pause before evaluation | Minimum cooldown | Minimum change |
 | -------- | ----------------------: | ---------------: | -------------: |
@@ -84,13 +85,15 @@ React + Tiptap ── Yjs ── IndexedDB
        │
        ├── activity policy ── Haiku gate ── Sonnet reasoning
        │                                      │
-       └── margin / conversation ← validated proposals
+       └── margin / inline exchanges ← validated proposals
 
 Python cell ── opaque-origin iframe ── Web Worker ── Pyodide
 ```
 
 - `src/components/NoteEditor.tsx`: document lifecycle, collaboration binding, persistence.
 - `src/components/Blocks.tsx`: code, diagram, and dice node views.
+- `src/components/AgentTurn.tsx`: persisted inline conversations and anchored proposals.
+- `src/components/Home.tsx`: document library and notebook preferences.
 - `src/lib/policy.ts`: intervention rules and content fingerprints.
 - `src/lib/context.ts`: structured-note context extraction.
 - `server/companion.ts`: staged model calls and honest offline behavior.
@@ -106,10 +109,10 @@ Yjs changes merge on the server; transport currently sends batched snapshots rat
 
 Python runs only when the user clicks Run, inside an opaque-origin sandboxed iframe and a disposable Web Worker. The iframe cannot access the app DOM or storage, and the API rejects its `Origin: null` requests. CSP restricts network access to locally served runtime assets. Startup has a 45-second timeout; execution has an 8-second timeout and 16 KB output limit. Browser workers do not provide hard process-memory quotas: use a server sandbox with memory limits before supporting hostile shared code. Python variables are fresh on each run; third-party package installation is not supported.
 
-Diagrams are intentionally limited to a sequence of typed labels. Generated arbitrary interactive JavaScript, web research/citations, multi-agent coordination, and long-term AI memory are not included. Only the current note and a bounded in-memory conversation are sent to AI. Google Fonts is the only remote dependency used by the canvas; system fallbacks remain available.
+Diagrams are intentionally limited to a sequence of typed labels. Generated arbitrary interactive JavaScript, web research/citations, multi-agent coordination, and long-term AI memory are not included. Only bounded current-note context and the most recent four completed inline exchanges are sent to AI. Google Fonts is the only remote dependency used by the canvas; system fallbacks remain available.
 
 ## Verification
 
-Automated tests cover intervention policy, silent/offline behavior, schema validation, concurrent Yjs merges, persistence across store re-open, HTTP save/reload, cross-origin rejection, NDJSON responses, and inclusion of code/math in stale-response detection.
+Automated tests cover intervention policy, silent/offline behavior, schema validation, concurrent Yjs merges, persistence across store re-open, HTTP save/reload, cross-origin rejection, NDJSON responses, inclusion of code/math in stale-response detection, slash routing, and completed-exchange context.
 
-Browser QA covers dark/light modes, presence controls, pause/resume, block insertion, undo, a Python cell with four real assertions, a 100-dice run, and accepting a diagram proposal. Live paid-model responses require your API key and are not asserted by these offline tests.
+Browser QA covers dark/light modes, home-only preferences, presence controls, pause/resume, inline questions and reload persistence, writing while a proposal is pending, anchored acceptance, math/code insertion, undo, Python execution, and a 100-dice run. Live paid-model responses require your API key and are not asserted by these offline tests.

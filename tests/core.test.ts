@@ -9,6 +9,60 @@ import { shouldEvaluate, policies, fingerprint } from '../src/lib/policy';
 import { offlineAnswer } from '../server/companion';
 import { requestSchema, responseSchema, type AgentRequest } from '../src/lib/schema';
 import { createApp } from '../server/app';
+import { parseInlineCommand, proposedNodes } from '../src/lib/inline-commands';
+import { nodeText } from '../src/lib/context';
+
+test('slash questions stay distinct from block commands and ordinary writing', () => {
+  for (const text of ['I use / for division', '/', '/   ', 'https://example.com']) {
+    assert.equal(parseInlineCommand(text), null);
+  }
+  assert.deepEqual(parseInlineCommand('/ code to explore this idea'), {
+    kind: 'ask',
+    prompt: 'code to explore this idea',
+  });
+  assert.deepEqual(parseInlineCommand('/ math is confusing\nCan you explain?'), {
+    kind: 'ask',
+    prompt: 'math is confusing\nCan you explain?',
+  });
+  assert.equal(parseInlineCommand('/code')?.kind, 'insert');
+  assert.deepEqual(parseInlineCommand('/math x^2 + y^2'), {
+    kind: 'insert',
+    node: { type: 'blockMath', attrs: { latex: 'x^2 + y^2' } },
+  });
+  assert.deepEqual(parseInlineCommand('/ How does this work?\nConsider the empty case.'), {
+    kind: 'ask',
+    prompt: 'How does this work?\nConsider the empty case.',
+  });
+});
+
+test('only completed replies become context, with kept proposals represented as note content', () => {
+  const attrs = { prompt: 'Explain the invariant', message: 'Following your thought…' };
+  for (const status of ['thinking', 'error']) {
+    const context = nodeText({ type: 'agentTurn', attrs: { ...attrs, status } });
+    assert.match(context, /User: Explain the invariant/);
+    assert.doesNotMatch(context, /Companion:|Following your thought/);
+  }
+  const validated = responseSchema.parse({
+    message: 'The left edge never moves backwards.',
+    blocks: [
+      { type: 'code', content: 'left = max(left, last + 1)' },
+      { type: 'math', content: 'L \\geq 0' },
+      { type: 'paragraph', content: '<script> is plain text' },
+    ],
+  });
+  const kept = proposedNodes(validated.blocks);
+  const context = nodeText({
+    type: 'doc',
+    content: [
+      { type: 'agentTurn', attrs: { ...attrs, status: 'done', message: validated.message } },
+      ...kept,
+    ],
+  });
+  assert.match(context, /Companion: The left edge never moves backwards/);
+  assert.match(context, /```python\nleft = max/);
+  assert.ok(context.includes('$L \\geq 0$'));
+  assert.deepEqual(kept[2].content, [{ type: 'text', text: '<script> is plain text' }]);
+});
 const request: AgentRequest = {
   noteId: 'test-note',
   prompt: 'Give me a hint',
